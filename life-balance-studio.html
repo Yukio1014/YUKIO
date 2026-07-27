@@ -1937,7 +1937,8 @@ function renderMoney(c){
       <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
         <span>行动力补充</span>
         <div style="display:flex;gap:6px;">
-          <button class="edit-btn" style="color:#34C759;" onclick="openAddReimbursement()">+ 报销</button>
+          <button class="edit-btn" style="color:var(--red);" onclick="openAddExpenseItem()">＋消费</button>
+          <button class="edit-btn" style="color:#34C759;" onclick="openAddReimbursement()">＋报销</button>
           <button class="edit-btn" onclick="editPlan()">预算</button>
         </div>
       </div>
@@ -2022,22 +2023,30 @@ function renderMoney(c){
     <!-- 封印宝箱 -->
     ${renderTreasureChest()}
 
-    <!-- 操作按钮 -->
-    <button class="report-btn" style="color:var(--red);" onclick="openAddExpenseItem()">＋ 添加消费明细</button>
-
     <div style="height:20px;"></div>
   `;
 }
 
 // ===== 硬性支出列表渲染 =====
 function renderHardExpenseList(fin){
-  if(!fin.hardExpenses || !fin.hardExpenses.length) return '';
+  if(!fin.hardExpenses || !fin.hardExpenses.length) return `
+    <div style="padding:8px 0;border-top:0.5px solid var(--separator);margin-top:4px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span style="font-size:13px;font-weight:600;color:var(--label);">硬性支出</span>
+        <button class="edit-btn" style="font-size:12px;" onclick="editHardExpense()">＋ 添加</button>
+      </div>
+      <div style="font-size:12px;color:var(--label-3);padding:4px 0;">暂无硬性支出</div>
+    </div>
+  `;
   const total = fin.hardTotal;
   return `
     <div style="padding:8px 0;border-top:0.5px solid var(--separator);margin-top:4px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
         <span style="font-size:13px;font-weight:600;color:var(--label);">硬性支出</span>
-        <span style="font-size:13px;color:var(--red);font-weight:600;">¥${fmtMoney(total)}</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:13px;color:var(--red);font-weight:600;">¥${fmtMoney(total)}</span>
+          <button class="edit-btn" style="font-size:12px;" onclick="editHardExpense()">编辑</button>
+        </div>
       </div>
       ${fin.hardExpenses.map(h=>`
         <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;">
@@ -2061,11 +2070,24 @@ function renderReimbursementList(fin){
       ${fin.reimbursements.map(r=>`
         <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;">
           <span style="color:var(--label-2);">💸 ${r.note||'报销'}</span>
-          <span style="color:#34C759;">+¥${fmtMoney(r.amount)}</span>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="color:#34C759;">+¥${fmtMoney(r.amount)}</span>
+            <button class="cmp-pair-edit" style="font-size:12px;" onclick="delReimbursement('${r.id}')">🗑</button>
+          </div>
         </div>
       `).join('')}
     </div>
   `;
+}
+
+function delReimbursement(id){
+  haptic();
+  const m = DB.finance[state.currentMonth];
+  if(!m || !m.reimbursements) return;
+  m.reimbursements = m.reimbursements.filter(r=>r.id!==id);
+  saveDB();
+  renderMoney(document.getElementById('content'));
+  toast('已删除报销记录');
 }
 
 // ===== 封印宝箱 =====
@@ -2313,7 +2335,25 @@ function editExpenseItem(cat){
       <button class="sheet-btn sheet-btn-secondary" onclick="closeSheet()">取消</button>
       <button class="sheet-btn sheet-btn-primary" onclick="saveExpenseItem('${realCat}')">保存</button>
     </div>
+    <div style="margin-top:12px;text-align:center;">
+      <button class="edit-btn" style="color:var(--red);font-size:13px;" onclick="delPlanCatFromExpense('${cat}')">删除此分类</button>
+    </div>
   `);
+}
+
+function delPlanCatFromExpense(cat){
+  haptic();
+  const m = DB.finance[state.currentMonth];
+  if(!m || !m.plan) return;
+  const realCat = Object.keys(m.plan).find(k=>k.replace(/'/g,'').replace(/"/g,'')===cat) || cat;
+  delete m.plan[realCat];
+  if(m.expenses){
+    m.expenses = m.expenses.filter(e=>e.cat!==realCat);
+  }
+  saveDB();
+  closeSheet();
+  renderMoney(document.getElementById('content'));
+  toast('已删除分类「'+realCat+'」');
 }
 
 function saveExpenseItem(cat){
@@ -4267,7 +4307,7 @@ function fmtCountdown(endsStr){
 
 // ===== 小决策转盘 =====
 function renderSmallDecisionWheel(){
-  const recent = (DB.smallDecisions||[]).slice(-3).reverse();
+  const recent = (DB.smallDecisions||[]).slice(-5).reverse();
   return `
     <div class="card" style="background:linear-gradient(135deg,#34C759,#30D158);color:#fff;border-radius:16px;padding:16px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -4280,9 +4320,12 @@ function renderSmallDecisionWheel(){
         <div style="margin-top:12px;padding-top:10px;border-top:0.5px solid rgba(255,255,255,.2);">
           <div style="font-size:11px;color:rgba(255,255,255,.7);margin-bottom:6px;">最近决策</div>
           ${recent.map(s=>`
-            <div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0;">
-              <span>${s.title}</span>
-              <span style="color:${s.result==='做'?'#fff':'rgba(255,255,255,.5)'};">${s.result}</span>
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:4px 0;">
+              <span>${s.title}${s.amount>0?' ¥'+s.amount:''}</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span style="color:${s.result==='做'?'#fff':(s.result==='不做'?'rgba(255,255,255,.5)':'#FFD700')};">${s.result}</span>
+                <button onclick="delSmallDecision('${s.id}')" style="background:none;border:none;color:rgba(255,255,255,.4);font-size:14px;padding:2px;">✕</button>
+              </div>
             </div>
           `).join('')}
         </div>
@@ -4291,8 +4334,18 @@ function renderSmallDecisionWheel(){
   `;
 }
 
+function delSmallDecision(id){
+  haptic();
+  if(!DB.smallDecisions) return;
+  DB.smallDecisions = DB.smallDecisions.filter(s=>s.id!==id);
+  saveDB();
+  renderDecision(document.getElementById('content'));
+  toast('已删除');
+}
+
 function openWheel(){
   haptic();
+  const wheelCats = DB.wheelCats || ['餐饮外卖','购物冲动','娱乐消费','其他'];
   openSheet(`
     <div class="sheet-title">🎲 小决策转盘</div>
     <div class="sheet-field">
@@ -4306,10 +4359,11 @@ function openWheel(){
     <div class="sheet-field">
       <div class="sheet-label">类型（可选）</div>
       <div class="cat-select" id="wheelCat">
-        <div class="cat-opt selected" onclick="selectWheelCat(this)">餐饮外卖</div>
-        <div class="cat-opt" onclick="selectWheelCat(this)">购物冲动</div>
-        <div class="cat-opt" onclick="selectWheelCat(this)">娱乐消费</div>
-        <div class="cat-opt" onclick="selectWheelCat(this)">其他</div>
+        ${wheelCats.map((c,i)=>'<div class="cat-opt '+(i===0?'selected':'')+'" onclick="selectWheelCat(this)">'+c+'</div>').join('')}
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <input class="sheet-input" id="newWheelCat" placeholder="新类型" style="flex:1;height:32px;font-size:13px;">
+        <button class="cmp-add-btn" style="width:32px;height:32px;" onclick="addWheelCat()">＋</button>
       </div>
     </div>
     <div id="wheelArea" style="text-align:center;padding:20px 0;">
@@ -4329,6 +4383,19 @@ function selectWheelCat(el){
   document.querySelectorAll('#wheelCat .cat-opt').forEach(o=>o.classList.remove('selected'));
   el.classList.add('selected');
   selectedWheelCat = el.textContent;
+}
+
+function addWheelCat(){
+  const name = document.getElementById('newWheelCat').value.trim();
+  if(!name){ toast('请输入类型名称'); return; }
+  haptic();
+  if(!DB.wheelCats) DB.wheelCats = ['餐饮外卖','购物冲动','娱乐消费','其他'];
+  if(DB.wheelCats.includes(name)){ toast('该类型已存在'); return; }
+  DB.wheelCats.push(name);
+  saveDB();
+  selectedWheelCat = name;
+  openWheel();
+  toast('已添加类型');
 }
 
 function checkWheelAmount(val){
@@ -4390,16 +4457,17 @@ function spinWheel(){
 function renderSmallDecisionSummary(){
   const now = new Date();
   const ym = now.toISOString().slice(0,7);
-  const monthData = (DB.smallDecisions||[]).filter(s=>s.timestamp.startsWith(ym));
+  const monthData = (DB.smallDecisions||[]).filter(s=>s.timestamp && s.timestamp.startsWith(ym));
   if(!monthData.length) return '';
   const totalCount = monthData.length;
-  const totalAmount = monthData.reduce((s,d)=>s+(d.amount||0),0);
+  const totalAmount = monthData.filter(d=>d.result==='做').reduce((s,d)=>s+(d.amount||0),0);
   const doCount = monthData.filter(d=>d.result==='做').length;
   const dontCount = monthData.filter(d=>d.result==='不做').length;
   const thinkCount = monthData.filter(d=>d.result==='再想想').length;
   const catMap = {};
   monthData.forEach(d=>{
-    catMap[d.category||'其他'] = (catMap[d.category||'其他']||0)+1;
+    const c = d.category||'其他';
+    catMap[c] = (catMap[c]||0)+1;
   });
   const cats = Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
   const topCat = cats[0] ? cats[0][0] : '-';
@@ -4412,7 +4480,7 @@ function renderSmallDecisionSummary(){
           <div style="font-size:18px;font-weight:700;">${totalCount}</div>
         </div>
         <div style="flex:1;text-align:center;background:#F2F2F7;border-radius:8px;padding:8px;">
-          <div style="font-size:11px;color:var(--label-3);">花费金额</div>
+          <div style="font-size:11px;color:var(--label-3);">已花费</div>
           <div style="font-size:18px;font-weight:700;">¥${fmtMoney(totalAmount)}</div>
         </div>
         <div style="flex:1;text-align:center;background:#F2F2F7;border-radius:8px;padding:8px;">
