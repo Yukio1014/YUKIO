@@ -1,0 +1,214 @@
+{
+  "settings": {
+    "yearlyTarget": 80000,
+    "rewardPool": 0
+  },
+  "finance": {
+    "2026-07": {
+      "incomePlanned": 0,
+      "incomeActual": 0,
+      "hardExpenses": [],
+      "catMeta": {},
+      "goldOverride": null,
+      "expenses": [],
+      "reimbursements": [],
+      "plan": {}
+    },
+    "2026-06": {
+      "incomePlanned": 0,
+      "incomeActual": 0,
+      "savingPlanned": 0,
+      "savingActual": 0,
+      "hardExpenses": [],
+      "catMeta": {},
+      "goldOverride": null,
+      "expenses": [],
+      "reimbursements": [],
+      "plan": {}
+    },
+    "2026-05": {
+      "incomePlanned": 0,
+      "incomeActual": 0,
+      "savingPlanned": 0,
+      "savingActual": 0,
+      "hardExpenses": [],
+      "catMeta": {},
+      "goldOverride": null,
+      "expenses": [],
+      "reimbursements": [],
+      "plan": {}
+    },
+    "2026-04": {
+      "incomePlanned": 0,
+      "incomeActual": 0,
+      "savingPlanned": 0,
+      "savingActual": 0,
+      "hardExpenses": [],
+      "catMeta": {},
+      "goldOverride": null,
+      "expenses": [],
+      "reimbursements": [],
+      "plan": {}
+    },
+    "2026-03": {
+      "incomePlanned": 0,
+      "incomeActual": 0,
+      "savingPlanned": 0,
+      "savingActual": 0,
+      "hardExpenses": [],
+      "catMeta": {},
+      "goldOverride": null,
+      "expenses": [],
+      "reimbursements": [],
+      "plan": {}
+    },
+    "2026-02": {
+      "incomePlanned": 0,
+      "incomeActual": 0,
+      "savingPlanned": 0,
+      "savingActual": 0,
+      "hardExpenses": [],
+      "catMeta": {},
+      "goldOverride": null,
+      "expenses": [],
+      "reimbursements": [],
+      "plan": {}
+    },
+    "2026-01": {
+      "incomePlanned": 0,
+      "incomeActual": 0,
+      "savingPlanned": 0,
+      "savingActual": 0,
+      "hardExpenses": [],
+      "catMeta": {},
+      "goldOverride": null,
+      "expenses": [],
+      "reimbursements": [],
+      "plan": {}
+    },
+    "2025-12": {
+      "incomePlanned": 0,
+      "incomeActual": 0,
+      "savingPlanned": 0,
+      "savingActual": 0,
+      "hardExpenses": [],
+      "catMeta": {},
+      "goldOverride": null,
+      "expenses": [],
+      "reimbursements": [],
+      "plan": {}
+    },
+    "2025-11": {
+      "incomePlanned": 0,
+      "incomeActual": 0,
+      "savingPlanned": 0,
+      "savingActual": 0,
+      "hardExpenses": [],
+      "catMeta": {},
+      "goldOverride": null,
+      "expenses": [],
+      "reimbursements": [],
+      "plan": {}
+    },
+    "2026-08": {
+      "incomePlanned": 0,
+      "incomeActual": 0,
+      "savingPlanned": 0,
+      "savingActual": 0,
+      "hardExpenses": [],
+      "catMeta": {},
+      "goldOverride": null,
+      "expenses": [],
+      "reimbursements": [],
+      "plan": {}
+    },
+    "2026-09": {
+      "incomePlanned": 0,
+      "incomeActual": 0,
+      "savingPlanned": 0,
+      "savingActual": 0,
+      "hardExpenses": [],
+      "catMeta": {},
+      "goldOverride": null,
+      "expenses": [],
+      "reimbursements": [],
+      "plan": {}
+    }
+  },
+  "savedTotal": 0,
+  "yearlyPlans": {},
+  "study": {
+    "monthlyGoal": 30,
+    "bigGoals": [],
+    "rewards": [],
+    "tasks": {},
+    "inspires": [],
+    "monthStats": {
+      "books": 2,
+      "englishHours": 18,
+      "inspires": 12
+    },
+    "taskCats": [
+      "英语",
+      "阅读",
+      "运动",
+      "技能",
+      "其他"
+    ],
+    "bookshelf": [],
+    "studySessions": [],
+    "timerActive": false,
+    "timerStart": null,
+    "timerCat": "阅读"
+  },
+  "family": [],
+  "health": {
+    "2025": [],
+    "2026": []
+  },
+  "social": [],
+  "decisions": [
+    {
+      "id": "d3",
+      "title": "买面霜",
+      "amount": 0,
+      "note": "多个品牌比选",
+      "status": "死刑",
+      "created_at": "2026-07-24T09:00:00",
+      "cooldownEnds": "2026-07-26T09:00:00",
+      "is_comparison": true,
+      "parent_group_id": null,
+      "decision_date": "2026-07-27",
+      "winner_id": null,
+      "options": [
+        {
+          "id": "o1",
+          "name": "兰蔻菁纯面霜",
+          "price": 1280,
+          "note": "太贵,但成分好",
+          "dead": false
+        },
+        {
+          "id": "o2",
+          "name": "雅诗兰黛红石榴",
+          "price": 780,
+          "note": "口碑好,适合干皮",
+          "dead": false
+        },
+        {
+          "id": "o3",
+          "name": "SK-II 神仙水面霜",
+          "price": 990,
+          "note": "价格适中,效果未知",
+          "dead": false
+        }
+      ]
+    }
+  ],
+  "smallDecisions": [],
+  "wheelRatio": {
+    "do": 1,
+    "dont": 1,
+    "think": 1
+  }
+}
