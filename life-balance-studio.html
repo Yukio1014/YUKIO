@@ -831,210 +831,69 @@ const DB = {
     yearlyTarget: 100000,   // 年度存款目标
     rewardPool: 0,           // 奖励库
   },
-  // 财务数据 - 按月存储
+  // 财务数据 - 按月存储 (起始月2026-07)
   finance:{
     '2026-07':{
-      incomePlanned: 12000,
-      incomeActual: 13500,
-      hardExpenses:[
-        {id:'h1',name:'房贷',amount:3500,note:''}
-      ],
+      incomePlanned: 0,
+      incomeActual: 0,
+      hardExpenses:[],
       catMeta:{},
       goldOverride:null,
-      expenses:[
-        {id:'e1',cat:'衣服服饰',amount:580,date:'07-12',note:'夏装',isAdvance:false},
-        {id:'e2',cat:'衣服服饰',amount:320,date:'07-20',note:'运动鞋',isAdvance:false},
-        {id:'e3',cat:'饮食吃喝',amount:1200,date:'07-15',note:'日常餐',isAdvance:false},
-        {id:'e4',cat:'饮食吃喝',amount:860,date:'07-22',note:'聚餐',isAdvance:false},
-        {id:'e5',cat:'购物买买买',amount:450,date:'07-18',note:'日用品',isAdvance:false},
-        {id:'e6',cat:'购物买买买',amount:920,date:'07-25',note:'数码配件',isAdvance:false},
-      ],
-      reimbursements:[
-        {id:'r1',amount:500,date:'07-20',note:'公司垫付报销'}
-      ],
-      // 各分类计划值(用于偏差报告)
-      plan:{
-        '衣服服饰':600,
-        '饮食吃喝':1500,
-        '购物买买买':1000,
-      }
-    },
-    '2026-06':{
-      incomePlanned:12000,incomeActual:12800,savingPlanned:3000,savingActual:3100,hardExpenses:[{id:'h1',name:'房贷',amount:3500,note:''}],catMeta:{},goldOverride:null,
-      expenses:[
-        {id:'e1',cat:'衣服服饰',amount:420,date:'06-10',note:'',isAdvance:false},
-        {id:'e2',cat:'饮食吃喝',amount:1100,date:'06-15',note:'',isAdvance:false},
-        {id:'e3',cat:'购物买买买',amount:680,date:'06-20',note:'',isAdvance:false},
-      ],
+      expenses:[],
       reimbursements:[],
-      plan:{'衣服服饰':600,'饮食吃喝':1500,'购物买买买':1000}
+      plan:{}
     }
   },
   // 已存入金额(用于首页进度)
-  savedTotal: 68000,
+  savedTotal: 0,
 
   // 年度计划(按年存储)
   yearlyPlans: {},
 
+  // 年度月结金币手动覆盖值
+  yearGoldOverride:{},
+
   // 学习数据
   study:{
     monthlyGoal: 30,  // 本月学习目标打卡次数
-    bigGoals:[
-      {id:'g1', title:'考下 PMP 认证', deadline:'2026-12-31', progress:65, reward:'奖励自己一台 iPad Pro', done:false},
-      {id:'g2', title:'读完 12 本书', deadline:'2026-12-31', progress:42, reward:'奖励一次日本旅行', done:false},
-    ],
-    rewards:[
-      {id:'r1', title:'iPad Pro', condition:'存款目标达成 80%', unlocked:false, icon:'📱'},
-      {id:'r2', title:'日本旅行', condition:'读完 12 本书', unlocked:false, icon:'✈️'},
-      {id:'r3', title:'米其林大餐', condition:'本月结余超 5000', unlocked:true, icon:'🍽️'},
-    ],
-    tasks:{
-      '2026-07-27':[
-        {id:'t1',text:'学习英语 45 分钟',done:false,time:'英语'},
-        {id:'t2',text:'看书 20 页《认知觉醒》',done:false,time:'阅读'},
-        {id:'t3',text:'复盘本周计划',done:false,time:'其他'},
-      ],
-      '2026-07-26':[
-        {id:'t4',text:'学习英语 45 分钟',done:true,time:'英语'},
-        {id:'t5',text:'看书 30 页《认知觉醒》',done:true,time:'阅读'},
-      ],
-    },
-    inspires:[
-      {text:'碎片化时间是最被低估的资产',date:'07-25'},
-      {text:'每周做一次断舍离,包括人际关系',date:'07-22'},
-    ],
-    // 月度统计
-    monthStats:{books:2,englishHours:18,inspires:12},
+    bigGoals:[],
+    rewards:[],
+    tasks:{},
+    inspires:[],
+    monthStats:{books:0,englishHours:0,inspires:0},
     taskCats:['英语','阅读','运动','技能','其他'],
-    // 书架
-    bookshelf:[
-      {id:'b1', title:'认知觉醒', author:'周岭', totalPages:280, currentPage:120, color:'#5AC8FA'},
-      {id:'b2', title:'原子习惯', author:'James Clear', totalPages:320, currentPage:65, color:'#FF9500'},
-    ],
-    // 学习计时记录 {date, minutes, cat}
+    bookshelf:[],
     studySessions:[],
-    // 计时状态
     timerActive:false,
     timerStart:null,
-    timerCat:'阅读',
+    timerCat:'',
   },
 
   // 家庭成员
-  family:[
-    {id:1,name:'张爸爸',role:'父亲',avatar:'爸',color:'#007AFF',
-     birthday:'1958-03-15',likes:'钓鱼、品茶',taboo:'无辣不欢,不吃香菜',
-     note:'每周日固定通电话,关注血压。'},
-    {id:2,name:'张妈妈',role:'母亲',avatar:'妈',color:'#FF9500',
-     birthday:'1962-08-20',likes:'广场舞、养花',taboo:'乳糖不耐受',
-     note:'腰不好,记得提醒她少提重物。'},
-    {id:3,name:'张小明',role:'儿子',avatar:'儿',color:'#34C759',
-     birthday:'2015-05-10',likes:'乐高、恐龙绘本',taboo:'花生过敏',
-     note:'幼儿园中班,每周三上美术课。'},
-    {id:4,name:'李奶奶',role:'奶奶',avatar:'奶',color:'#AF52DE',
-     birthday:'1938-12-08',likes:'听戏、晒太阳',taboo:'糖尿病,控糖',
-     note:'今年高寿,需定期陪同体检。'},
-  ],
+  family:[],
 
   // 健康档案
-  health:{
-    '2026':[
-      {name:'2026 年度体检报告.pdf',tag:'2026体检报告',type:'pdf',date:'2026-03-20',checked:true},
-      {name:'血常规化验单.jpg',tag:'血常规',type:'img',date:'2026-03-20',checked:true},
-      {name:'口腔全景片.pdf',tag:'口腔检查',type:'pdf',date:'2026-01-15',checked:true},
-    ],
-    '2025':[
-      {name:'2025 年度体检报告.pdf',tag:'2025体检报告',type:'pdf',date:'2025-03-18',checked:true},
-      {name:'心电图报告.pdf',tag:'心电图',type:'pdf',date:'2025-03-18',checked:true},
-    ]
-  },
+  health:{},
 
   // 朋友圈
-  social:[
-    {id:1,name:'李伟',avatar:'李',color:'#007AFF',company:'字节跳动 / 产品总监',
-     birthday:'03-15',likes:'高尔夫、威士忌',hobbies:'摄影、徒步',tags:[{name:'老友',color:'#007AFF'}]},
-    {id:2,name:'王芳',avatar:'王',color:'#FF9500',company:'阿里云 / 技术专家',
-     birthday:'11-22',likes:'插花、瑜伽',hobbies:'烘焙、旅行',tags:[{name:'潜在客户',color:'#FF9500'}]},
-    {id:3,name:'陈晨',avatar:'陈',color:'#34C759',company:'腾讯 / 设计师',
-     birthday:'07-08',likes:'手冲咖啡',hobbies:'画画、电影',tags:[{name:'老友',color:'#007AFF'},{name:'同行',color:'#34C759'}]},
-    {id:4,name:'赵磊',avatar:'赵',color:'#AF52DE',company:'独立创业者',
-     birthday:'09-30',likes:'品酒、网球',hobbies:'健身、读书',tags:[{name:'合作伙伴',color:'#AF52DE'}]},
-  ],
+  social:[],
 
   // 事缓则圆 - 决策记录
-  // 字段:id/title/amount/note/status(悬案/待办/已了/死刑)/is_comparison/parent_group_id/decision_date
-  //       created_at/options(比选组:[{id,name,price,note,dead}])/winner_id/cooldownEnds
-  decisions:[
-    {
-      id:'d1', title:'买 iPad Pro 11寸', amount:7999, note:'学习+画画用',
-      status:'悬案',
-      created_at:'2026-07-25T10:00:00',
-      cooldownEnds:'2026-07-28T10:00:00',
-      is_comparison:false, parent_group_id:null, decision_date:null,
-    },
-    {
-      id:'d2', title:'换新手机', amount:5999, note:'现用手机已3年',
-      status:'悬案',
-      created_at:'2026-07-26T20:00:00',
-      cooldownEnds:'2026-07-29T20:00:00',
-      is_comparison:false, parent_group_id:null, decision_date:null,
-    },
-    {
-      id:'d3', title:'买面霜', amount:0, note:'多个品牌比选',
-      status:'悬案',
-      created_at:'2026-07-24T09:00:00',
-      cooldownEnds:'2026-07-26T09:00:00',
-      is_comparison:true, parent_group_id:null, decision_date:null,
-      winner_id:null,
-      options:[
-        {id:'o1', name:'兰蔻菁纯面霜', price:1280, note:'太贵,但成分好', dead:false},
-        {id:'o2', name:'雅诗兰黛红石榴', price:780, note:'口碑好,适合干皮', dead:false},
-        {id:'o3', name:'SK-II 神仙水面霜', price:990, note:'价格适中,效果未知', dead:false},
-      ]
-    },
-    {
-      id:'d4', title:'办健身年卡', amount:2888, note:'楼下新开的健身房',
-      status:'待办',
-      created_at:'2026-07-10T08:00:00',
-      cooldownEnds:'2026-07-13T08:00:00',
-      is_comparison:false, parent_group_id:null, decision_date:null,
-    },
-    {
-      id:'d5', title:'买人体工学椅', amount:1599, note:'腰快断了',
-      status:'待办',
-      created_at:'2026-06-20T15:00:00',
-      cooldownEnds:'2026-06-23T15:00:00',
-      is_comparison:false, parent_group_id:null, decision_date:null,
-    },
-    {
-      id:'d6', title:'报在线英语课', amount:3600, note:'一年期',
-      status:'已了',
-      created_at:'2026-06-01T10:00:00',
-      cooldownEnds:'2026-06-04T10:00:00',
-      is_comparison:false, parent_group_id:null, decision_date:'2026-06-15',
-    },
-    {
-      id:'d7', title:'买 switch 游戏', amount:299, note:'冲动消费',
-      status:'死刑',
-      created_at:'2026-05-10T22:00:00',
-      cooldownEnds:'2026-05-13T22:00:00',
-      is_comparison:false, parent_group_id:null, decision_date:'2026-05-14',
-    },
-  ],
+  decisions:[],
 
   // 事缓则圆 - 小决策转盘记录
-  smallDecisions:[
-    {id:'sd1',title:'买杯奶茶',amount:28,result:'做',category:'餐饮外卖',timestamp:'2026-07-20T14:30:00'},
-    {id:'sd2',title:'充视频会员',amount:25,result:'不做',category:'娱乐消费',timestamp:'2026-07-22T21:00:00'},
-    {id:'sd3',title:'买零食',amount:35,result:'做',category:'餐饮外卖',timestamp:'2026-07-25T15:00:00'},
-  ],
+  smallDecisions:[],
   // 转盘比例配置(做/不做/再想想)
   wheelRatio:{do:1,dont:1,think:1},
+  // 转盘自定义类型
+  wheelCats:['餐饮外卖','购物冲动','娱乐消费','其他'],
 };
 
 // ===== 状态 =====
 // ===== 数据持久化(localStorage) =====
 const STORAGE_KEY = 'life_balance_studio_v1';
 const BACKUP_KEY = 'life_balance_studio_backup';
+const DB_VERSION = 'v2_clean';
 
 function saveDB(){
   try {
@@ -1050,6 +909,7 @@ function saveDB(){
       if(backups.length > 3) backups = backups.slice(0,3);
       localStorage.setItem(BACKUP_KEY, JSON.stringify(backups));
     } catch(e2){ /* 备份失败不影响主流程 */ }
+    localStorage.setItem('life_balance_db_version', DB_VERSION);
   } catch(e) {
     // localStorage 满了(可能 base64 太大),尝试不含 health.data 存
     try {
@@ -1206,6 +1066,13 @@ function openDataManager(){
 
 function loadDB(){
   try {
+    // 版本检测：旧数据直接清除
+    const savedVersion = localStorage.getItem('life_balance_db_version');
+    if(savedVersion !== DB_VERSION){
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.setItem('life_balance_db_version', DB_VERSION);
+      return false;
+    }
     const saved = localStorage.getItem(STORAGE_KEY);
     if(!saved) return false;
     const loaded = JSON.parse(saved);
@@ -1515,7 +1382,7 @@ function analyzeYearFinance(year){
   const yStr = String(year);
   const months = [];
   const catTotals = {};
-  let totalIncome = 0, totalExpense = 0, totalSavingPlanned = 0, totalSavingActual = 0;
+  let totalIncome = 0, totalExpense = 0, totalGoldPlanned = 0, totalGoldActual = 0;
   let planAccuracySum = 0, planAccuracyCount = 0;
 
   for(let m=1;m<=12;m++){
@@ -1527,13 +1394,19 @@ function analyzeYearFinance(year){
       monthCats[e.cat] = (monthCats[e.cat]||0) + e.amount;
       catTotals[e.cat] = (catTotals[e.cat]||0) + e.amount;
     });
-    const monthExpense = Object.values(monthCats).reduce((a,b)=>a+b,0) + (fin.hardExpenses||[]).reduce((s,h)=>s+(h.amount||0),0);
-    totalIncome += (fin.incomeActual||0);
-    totalExpense += monthExpense;
-    totalSavingPlanned += (fin.savingPlanned||0);
-    totalSavingActual += (fin.savingActual||0);
+    const reimbursements = (fin.reimbursements||[]).reduce((s,r)=>s+(r.amount||0),0);
+    const hardTotal = (fin.hardExpenses||[]).reduce((s,h)=>s+(h.amount||0),0);
+    const monthExpense = Object.values(monthCats).reduce((a,b)=>a+b,0) + hardTotal;
+    const monthIncome = (fin.incomeActual||0);
+    const goldPlanned = (fin.incomePlanned||0) - Object.values(fin.plan||{}).reduce((a,b)=>a+b,0) - hardTotal;
+    const goldActual = (fin.goldOverride !== null && fin.goldOverride !== undefined) ? fin.goldOverride : (monthIncome - monthExpense + reimbursements);
 
-    // 计算预估精确度(收入+存款的预估偏差)
+    totalIncome += monthIncome;
+    totalExpense += monthExpense;
+    totalGoldPlanned += goldPlanned;
+    totalGoldActual += goldActual;
+
+    // 计算预估精确度(收入预估偏差)
     if(fin.incomePlanned && fin.incomeActual){
       const dev = Math.abs(fin.incomeActual - fin.incomePlanned) / Math.max(fin.incomePlanned,1);
       planAccuracySum += (1 - Math.min(1, dev));
@@ -1543,9 +1416,8 @@ function analyzeYearFinance(year){
     months.push({
       month: m,
       incomePlanned: fin.incomePlanned||0,
-      incomeActual: fin.incomeActual||0,
-      savingPlanned: fin.savingPlanned||0,
-      savingActual: fin.savingActual||0,
+      incomeActual: monthIncome,
+      goldPlanned, goldActual,
       expense: monthExpense,
       cats: monthCats
     });
@@ -1557,7 +1429,7 @@ function analyzeYearFinance(year){
   const totalCatSpend = catList.reduce((s,[,v])=>s+v,0);
 
   return {
-    months, totalIncome, totalExpense, totalSavingPlanned, totalSavingActual,
+    months, totalIncome, totalExpense, totalGoldPlanned, totalGoldActual,
     topCat: topCat[0], topCatAmount: topCat[1],
     accuracy, catList, totalCatSpend,
     hasData: months.length > 0
@@ -1641,7 +1513,7 @@ function renderYearArchive(){
   if(!fin.hasData){
     html += `<div class="archive-section"><div class="archive-section-title">💰 财务分析</div><div class="empty-state" style="padding:20px;"><div class="empty-state-text">${year}年暂无财务数据</div></div></div>`;
   } else {
-    const savingDiff = fin.totalSavingActual - fin.totalSavingPlanned;
+    const goldDiff = fin.totalGoldActual - fin.totalGoldPlanned;
     html += `
       <div class="archive-section">
         <div class="archive-section-title">💰 财务分析</div>
@@ -1655,8 +1527,11 @@ function renderYearArchive(){
             <div class="archive-stat-val" style="color:var(--red);">¥${fmtMoney(fin.totalExpense)}</div>
           </div>
           <div class="archive-stat">
-            <div class="archive-stat-label">实际存款</div>
-            <div class="archive-stat-val" style="color:var(--green);">¥${fmtMoney(fin.totalSavingActual)}</div>
+            <div class="archive-stat-label">实际月结金币</div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div class="archive-stat-val" style="color:var(--green);">¥${fmtMoney(DB.yearGoldOverride?.[year] ?? fin.totalGoldActual)}</div>
+              <button class="edit-btn" style="font-size:12px;" onclick="editYearGold(${year})">编辑</button>
+            </div>
           </div>
           <div class="archive-stat">
             <div class="archive-stat-label">预估精确度</div>
@@ -1799,7 +1674,7 @@ function openYearPlanEditor(year){
 
   // 自动建议值
   const avgIncome = fin.hasData ? Math.round(fin.totalIncome / fin.months.length) : 12000;
-  const avgSaving = fin.hasData ? Math.round(fin.totalSavingActual / fin.months.length) : 3000;
+  const avgSaving = fin.hasData ? Math.round(fin.totalGoldActual / fin.months.length) : 0;
   const suggestedStudyGoal = study.hasData ? Math.max(DB.study.monthlyGoal||30, Math.round(study.doneTasks/12)+5) : (DB.study.monthlyGoal||30);
 
   openSheet(`
@@ -1860,7 +1735,7 @@ function autoGeneratePlan(year){
   if(!DB.yearlyPlans) DB.yearlyPlans = {};
 
   const avgIncome = fin.hasData ? Math.round(fin.totalIncome / fin.months.length) : 12000;
-  const avgSaving = fin.hasData ? Math.round(fin.totalSavingActual / fin.months.length) : 3000;
+  const avgSaving = fin.hasData ? Math.round(fin.totalGoldActual / fin.months.length) : 0;
   const suggestedStudyGoal = study.hasData ? Math.max(DB.study.monthlyGoal||30, Math.round(study.doneTasks/12)+5) : (DB.study.monthlyGoal||30);
 
   let notes = '';
@@ -1892,7 +1767,7 @@ function autoGeneratePlan(year){
 function renderMoney(c){
   const fin = calcMonthFinance(state.currentMonth);
   const [y,m] = state.currentMonth.split('-');
-  const monthData = DB.finance[state.currentMonth] || {incomePlanned:0,incomeActual:0,savingPlanned:0,savingActual:0,hardExpenses:[],catMeta:{},goldOverride:null,expenses:[],reimbursements:[],plan:{}};
+  const monthData = DB.finance[state.currentMonth] || {incomePlanned:0,incomeActual:0,hardExpenses:[],catMeta:{},goldOverride:null,expenses:[],reimbursements:[],plan:{}};
 
   // 预估消费总额和实际消费总额
   const planTotal = Object.values(fin.plan||{}).reduce((a,b)=>a+b,0);
@@ -2392,8 +2267,10 @@ function changeMonth(delta){
   const [y,m] = state.currentMonth.split('-').map(Number);
   const d = new Date(y, m-1+delta, 1);
   const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  // 起始月份2026-07，不能往前翻到更早
+  if(key < '2026-07') { toast('2026年7月是起始月'); return; }
   if(!DB.finance[key]){
-    DB.finance[key] = { incomePlanned:0, incomeActual:0, savingPlanned:0, savingActual:0, hardExpenses:[], catMeta:{}, goldOverride:null, expenses:[], reimbursements:[], plan:{} };
+    DB.finance[key] = { incomePlanned:0, incomeActual:0, hardExpenses:[], catMeta:{}, goldOverride:null, expenses:[], reimbursements:[], plan:{} };
   }
   state.currentMonth = key;
   saveDB();
