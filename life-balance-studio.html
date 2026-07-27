@@ -1902,7 +1902,7 @@ function renderMoney(c){
       </div>
       ${getExpenseRows(fin, monthData)}
       <div class="cmp-pair-row">
-        <span class="cmp-pair-name">车贷/房贷</span>
+        <span class="cmp-pair-name">硬性支出</span>
         <span class="cmp-pair-col">¥ ${fmtMoney(fin.hardExpense)}</span>
         <span class="cmp-pair-col expense">¥ ${fmtMoney(fin.hardExpense)}</span>
         <button class="cmp-pair-edit" onclick="editHardExpense()">✏</button>
@@ -2013,12 +2013,19 @@ function getExpenseRows(fin, monthData){
     const actual = fin.catSummary[cat] || 0;
     const diff = actual - planned;
     const diffStr = diff===0 ? '' : (diff>0 ? '<span style="color:var(--red);font-size:11px;">+'+fmtMoney(diff)+'</span>' : '<span style="color:var(--green);font-size:11px;">-'+fmtMoney(-diff)+'</span>');
+    // 获取该分类下所有消费的备注
+    const notes = (monthData.expenses||[]).filter(e=>e.cat===cat && e.note);
+    const notesHtml = notes.length ? '<div style="font-size:11px;color:var(--label-3);padding:2px 0 0;line-height:1.4;">' + notes.map(e=>'· '+e.note).join('<br>') + '</div>' : '';
+    const safeCat = cat.replace(/'/g,'').replace(/"/g,'');
     return `
-      <div class="cmp-pair-row">
-        <span class="cmp-pair-name">${cat}</span>
-        <span class="cmp-pair-col">¥ ${fmtMoney(planned)}</span>
-        <span class="cmp-pair-col expense">¥ ${fmtMoney(actual)} ${diffStr}</span>
-        <button class="cmp-pair-edit" onclick="editExpenseItem('${cat}')">✏</button>
+      <div class="cmp-pair-row" style="flex-direction:column;align-items:stretch;">
+        <div style="display:flex;align-items:center;">
+          <span class="cmp-pair-name">${cat}</span>
+          <span class="cmp-pair-col">¥ ${fmtMoney(planned)}</span>
+          <span class="cmp-pair-col expense">¥ ${fmtMoney(actual)} ${diffStr}</span>
+          <button class="cmp-pair-edit" onclick="editExpenseItem('${safeCat}')">✏</button>
+        </div>
+        ${notesHtml}
       </div>
     `;
   }).join('');
@@ -2081,26 +2088,32 @@ function editExpenseItem(cat){
   haptic();
   const m = DB.finance[state.currentMonth];
   if(!m) return;
-  const items = m.expenses.filter(e=>e.cat===cat);
+  // 处理特殊字符分类名
+  const allCats = [...new Set([...Object.keys(m.plan||{}), ...(m.expenses||[]).map(e=>e.cat)])];
+  const realCat = allCats.find(k=>k.replace(/'/g,'').replace(/"/g,'')===cat) || cat;
+  const items = (m.expenses||[]).filter(e=>e.cat===realCat);
   const total = items.reduce((s,e)=>s+e.amount,0);
   openSheet(`
-    <div class="sheet-title">编辑: ${cat}</div>
+    <div class="sheet-title">编辑: ${realCat}</div>
     <div class="sheet-field">
       <div class="sheet-label">预算(预估值)</div>
-      <input class="sheet-input" id="editPlanCat" type="number" value="${(m.plan||{})[cat]||0}" placeholder="0">
+      <input class="sheet-input" id="editPlanCat" type="number" value="${(m.plan||{})[realCat]||(m.plan||{})[cat]||0}" placeholder="0">
     </div>
     <div style="padding:12px 0;border-bottom:.5px solid var(--separator);">
       <div style="font-size:14px;color:var(--label-3);margin-bottom:8px;">当前实际: ¥${fmtMoney(total)} (${items.length}笔)</div>
-      ${items.map(e=>`
+      ${items.map((e,idx)=>`
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;">
-          <div><span>¥${fmtMoney(e.amount)}</span>${e.note?' <span style="color:var(--label-3);font-size:13px;">'+e.note+'</span>':''}</div>
+          <div style="flex:1;">
+            <span>¥${fmtMoney(e.amount)}</span>
+            <input class="sheet-input" id="expNote_${idx}" value="${(e.note||'').replace(/"/g,'&quot;')}" placeholder="备注(可选)" style="width:140px;height:28px;font-size:13px;margin-left:8px;padding:0 8px;display:inline-block;">
+          </div>
           <button class="cmp-pair-edit" onclick="delExpenseEntry('${e.id}')">🗑</button>
         </div>
       `).join('') || '<div style="color:var(--label-3);font-size:14px;">暂无记录</div>'}
     </div>
     <div class="sheet-actions" style="margin-top:14px;">
       <button class="sheet-btn sheet-btn-secondary" onclick="closeSheet()">取消</button>
-      <button class="sheet-btn sheet-btn-primary" onclick="saveExpenseItem('${cat}')">保存</button>
+      <button class="sheet-btn sheet-btn-primary" onclick="saveExpenseItem('${realCat}')">保存</button>
     </div>
   `);
 }
@@ -2112,7 +2125,12 @@ function saveExpenseItem(cat){
   if(!m.plan) m.plan = {};
   const v = parseFloat(document.getElementById('editPlanCat').value)||0;
   if(v>0) m.plan[cat] = v;
-  else delete m.plan[cat];
+  // 保存每笔消费的备注
+  const items = (m.expenses||[]).filter(e=>e.cat===cat);
+  items.forEach((e,idx)=>{
+    const noteEl = document.getElementById('expNote_'+idx);
+    if(noteEl) e.note = noteEl.value.trim();
+  });
   saveDB();
   closeSheet();
   renderMoney(document.getElementById('content'));
@@ -2195,7 +2213,7 @@ function editHardExpense(){
   openSheet(`
     <div class="sheet-title">编辑硬性支出 · ${state.currentMonth}</div>
     <div class="sheet-field">
-      <div class="sheet-label">车贷/房贷</div>
+      <div class="sheet-label">硬性支出</div>
       <input class="sheet-input" id="editHard" type="number" value="${m.hardExpense}" placeholder="0">
     </div>
     <div class="sheet-actions">
@@ -2230,15 +2248,17 @@ function renderPlanSheet(cats){
   openSheet(`
     <div class="sheet-title">编辑消费分类</div>
     <div id="planCats">
-      ${cats.map(c=>`
+      ${cats.map(c=>{
+        const safeName = c.replace(/'/g,'').replace(/"/g,'');
+        return `
         <div class="sheet-field" style="display:flex;align-items:center;gap:8px;">
           <div style="flex:1;">
             <div class="sheet-label">${c}</div>
-            <input class="sheet-input" id="plan_${c}" type="number" value="${m.plan[c]||0}" placeholder="0">
+            <input class="sheet-input" id="plan_${safeName}" type="number" value="${m.plan[c]||0}" placeholder="0">
           </div>
-          <button class="cmp-pair-edit" style="background:#FFEBEE;color:var(--red);flex-shrink:0;" onclick="delPlanCat('${c}')">🗑</button>
+          <button class="cmp-pair-edit" style="background:#FFEBEE;color:var(--red);flex-shrink:0;width:36px;height:36px;font-size:16px;" onclick="delPlanCat('${safeName}')">🗑</button>
         </div>
-      `).join('')}
+      `}).join('')}
     </div>
     <div class="sheet-field" style="display:flex;gap:8px;align-items:flex-end;">
       <div style="flex:1;">
@@ -2257,8 +2277,10 @@ function renderPlanSheet(cats){
 function savePlan(){
   haptic();
   const m = DB.finance[state.currentMonth];
+  if(!m || !m.plan) return;
   Object.keys(m.plan).forEach(c=>{
-    const el = document.getElementById('plan_'+c);
+    const safeName = c.replace(/'/g,'').replace(/"/g,'');
+    const el = document.getElementById('plan_'+safeName);
     if(el) m.plan[c] = parseFloat(el.value)||0;
   });
   saveDB();
@@ -2281,12 +2303,19 @@ function addPlanCat(){
 
 function delPlanCat(name){
   haptic();
-  if(!confirm('确定删除分类「'+name+'」?')) return;
   const m = DB.finance[state.currentMonth];
-  delete m.plan[name];
+  if(!m || !m.plan) return;
+  // 找到实际分类名(处理特殊字符被清理的情况)
+  const realName = Object.keys(m.plan).find(k=>k.replace(/'/g,'').replace(/"/g,'')===name) || name;
+  if(m.plan[realName]===undefined){ toast('找不到该分类'); return; }
+  delete m.plan[realName];
+  // 同时删除该分类下的消费记录
+  if(m.expenses){
+    m.expenses = m.expenses.filter(e=>e.cat!==realName);
+  }
   saveDB();
   renderPlanSheet(Object.keys(m.plan));
-  toast('已删除分类');
+  toast('已删除分类「'+realName+'」');
 }
 
 function openReport(){
