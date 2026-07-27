@@ -836,16 +836,21 @@ const DB = {
     '2026-07':{
       incomePlanned: 12000,
       incomeActual: 13500,
-      savingPlanned: 3000,
-      savingActual: 2800,
-      hardExpense: 3500,  // 房贷
+      hardExpenses:[
+        {id:'h1',name:'房贷',amount:3500,note:''}
+      ],
+      catMeta:{},
+      goldOverride:null,
       expenses:[
-        {id:'e1',cat:'衣服服饰',amount:580,date:'07-12',note:'夏装'},
-        {id:'e2',cat:'衣服服饰',amount:320,date:'07-20',note:'运动鞋'},
-        {id:'e3',cat:'饮食吃喝',amount:1200,date:'07-15',note:'日常餐'},
-        {id:'e4',cat:'饮食吃喝',amount:860,date:'07-22',note:'聚餐'},
-        {id:'e5',cat:'购物买买买',amount:450,date:'07-18',note:'日用品'},
-        {id:'e6',cat:'购物买买买',amount:920,date:'07-25',note:'数码配件'},
+        {id:'e1',cat:'衣服服饰',amount:580,date:'07-12',note:'夏装',isAdvance:false},
+        {id:'e2',cat:'衣服服饰',amount:320,date:'07-20',note:'运动鞋',isAdvance:false},
+        {id:'e3',cat:'饮食吃喝',amount:1200,date:'07-15',note:'日常餐',isAdvance:false},
+        {id:'e4',cat:'饮食吃喝',amount:860,date:'07-22',note:'聚餐',isAdvance:false},
+        {id:'e5',cat:'购物买买买',amount:450,date:'07-18',note:'日用品',isAdvance:false},
+        {id:'e6',cat:'购物买买买',amount:920,date:'07-25',note:'数码配件',isAdvance:false},
+      ],
+      reimbursements:[
+        {id:'r1',amount:500,date:'07-20',note:'公司垫付报销'}
       ],
       // 各分类计划值(用于偏差报告)
       plan:{
@@ -855,12 +860,13 @@ const DB = {
       }
     },
     '2026-06':{
-      incomePlanned:12000,incomeActual:12800,savingPlanned:3000,savingActual:3100,hardExpense:3500,
+      incomePlanned:12000,incomeActual:12800,savingPlanned:3000,savingActual:3100,hardExpenses:[{id:'h1',name:'房贷',amount:3500,note:''}],catMeta:{},goldOverride:null,
       expenses:[
-        {id:'e1',cat:'衣服服饰',amount:420,date:'06-10'},
-        {id:'e2',cat:'饮食吃喝',amount:1100,date:'06-15'},
-        {id:'e3',cat:'购物买买买',amount:680,date:'06-20'},
+        {id:'e1',cat:'衣服服饰',amount:420,date:'06-10',note:'',isAdvance:false},
+        {id:'e2',cat:'饮食吃喝',amount:1100,date:'06-15',note:'',isAdvance:false},
+        {id:'e3',cat:'购物买买买',amount:680,date:'06-20',note:'',isAdvance:false},
       ],
+      reimbursements:[],
       plan:{'衣服服饰':600,'饮食吃喝':1500,'购物买买买':1000}
     }
   },
@@ -1013,7 +1019,16 @@ const DB = {
       cooldownEnds:'2026-05-13T22:00:00',
       is_comparison:false, parent_group_id:null, decision_date:'2026-05-14',
     },
-  ]
+  ],
+
+  // 事缓则圆 - 小决策转盘记录
+  smallDecisions:[
+    {id:'sd1',title:'买杯奶茶',amount:28,result:'做',category:'餐饮外卖',timestamp:'2026-07-20T14:30:00'},
+    {id:'sd2',title:'充视频会员',amount:25,result:'不做',category:'娱乐消费',timestamp:'2026-07-22T21:00:00'},
+    {id:'sd3',title:'买零食',amount:35,result:'做',category:'餐饮外卖',timestamp:'2026-07-25T15:00:00'},
+  ],
+  // 转盘比例配置(做/不做/再想想)
+  wheelRatio:{do:1,dont:1,think:1},
 };
 
 // ===== 状态 =====
@@ -1198,7 +1213,24 @@ function loadDB(){
     Object.keys(loaded).forEach(key=>{
       if(key === 'finance'){
         Object.keys(loaded.finance||{}).forEach(mk=>{
-          DB.finance[mk] = loaded.finance[mk];
+          const m = loaded.finance[mk];
+          // 数据迁移: hardExpense(数字) -> hardExpenses(数组)
+          if(m.hardExpense !== undefined && m.hardExpenses === undefined){
+            if(typeof m.hardExpense === 'number' && m.hardExpense > 0){
+              m.hardExpenses = [{id:'h_'+mk,name:'硬性支出',amount:m.hardExpense,note:''}];
+            } else {
+              m.hardExpenses = [];
+            }
+            delete m.hardExpense;
+          }
+          if(m.hardExpenses === undefined) m.hardExpenses = [];
+          if(m.catMeta === undefined) m.catMeta = {};
+          if(m.goldOverride === undefined) m.goldOverride = null;
+          if(m.reimbursements === undefined) m.reimbursements = [];
+          if(m.expenses && Array.isArray(m.expenses)){
+            m.expenses.forEach(e=>{ if(e.isAdvance === undefined) e.isAdvance = false; });
+          }
+          DB.finance[mk] = m;
         });
       } else if(key === 'study'){
         // 深合并 study:逐字段合并,保留默认值,只覆盖已存字段
@@ -1264,15 +1296,37 @@ function emitDecisions(){ state.listeners.decisions.forEach(f=>f()); }
 // ===== 计算工具 =====
 function calcMonthFinance(monthKey){
   const m = DB.finance[monthKey];
-  if(!m) return {expenseTotal:0,hardExpense:0,balance:0,catSummary:{}};
+  if(!m) return {expenseTotal:0,hardTotal:0,balance:0,catSummary:{},reimbTotal:0,advanceTotal:0,advanceCount:0,goldPlanned:0,goldActual:0,goldOverride:null,hardExpenses:[],reimbursements:[],plan:{},catMeta:{}};
   const catSummary = {};
-  m.expenses.forEach(e=>{
+  const advanceCats = {};
+  (m.expenses||[]).forEach(e=>{
     catSummary[e.cat] = (catSummary[e.cat]||0) + e.amount;
+    if(e.isAdvance){
+      advanceCats[e.cat] = (advanceCats[e.cat]||0) + e.amount;
+    }
   });
   const monthExpense = Object.values(catSummary).reduce((a,b)=>a+b,0);
-  const expenseTotal = monthExpense + m.hardExpense;
-  const balance = m.incomeActual - expenseTotal;
-  return {monthExpense,expenseTotal,balance,catSummary,incomePlanned:m.incomePlanned,incomeActual:m.incomeActual,savingPlanned:m.savingPlanned||0,savingActual:m.savingActual||0,hardExpense:m.hardExpense,plan:m.plan};
+  const hardExpenses = m.hardExpenses||[];
+  const hardTotal = hardExpenses.reduce((s,h)=>s+(h.amount||0),0);
+  const reimbursements = m.reimbursements||[];
+  const reimbTotal = reimbursements.reduce((s,r)=>s+(r.amount||0),0);
+  const advanceTotal = Object.values(advanceCats).reduce((a,b)=>a+b,0);
+  const advanceCount = (m.expenses||[]).filter(e=>e.isAdvance).length;
+  const expenseTotal = monthExpense + hardTotal;
+  const goldPlanned = (m.incomePlanned||0) - Object.values(m.plan||{}).reduce((a,b)=>a+b,0) - hardTotal;
+  const goldActual = (m.incomeActual||0) - monthExpense - hardTotal + reimbTotal;
+  const goldOverride = m.goldOverride;
+  const goldFinal = goldOverride !== null ? goldOverride : goldActual;
+  const balance = goldFinal;
+  return {
+    monthExpense, expenseTotal, balance, catSummary,
+    incomePlanned:m.incomePlanned, incomeActual:m.incomeActual,
+    hardExpenses, hardTotal,
+    reimbursements, reimbTotal,
+    advanceTotal, advanceCount, advanceCats,
+    plan:m.plan, catMeta:m.catMeta||{},
+    goldPlanned, goldActual, goldOverride, goldFinal
+  };
 }
 
 function todayRemainingTasks(){
@@ -1473,7 +1527,7 @@ function analyzeYearFinance(year){
       monthCats[e.cat] = (monthCats[e.cat]||0) + e.amount;
       catTotals[e.cat] = (catTotals[e.cat]||0) + e.amount;
     });
-    const monthExpense = Object.values(monthCats).reduce((a,b)=>a+b,0) + (fin.hardExpense||0);
+    const monthExpense = Object.values(monthCats).reduce((a,b)=>a+b,0) + (fin.hardExpenses||[]).reduce((s,h)=>s+(h.amount||0),0);
     totalIncome += (fin.incomeActual||0);
     totalExpense += monthExpense;
     totalSavingPlanned += (fin.savingPlanned||0);
@@ -1838,7 +1892,17 @@ function autoGeneratePlan(year){
 function renderMoney(c){
   const fin = calcMonthFinance(state.currentMonth);
   const [y,m] = state.currentMonth.split('-');
-  const monthData = DB.finance[state.currentMonth] || {incomePlanned:0,incomeActual:0,savingPlanned:0,savingActual:0,hardExpense:0,expenses:[],plan:{}};
+  const monthData = DB.finance[state.currentMonth] || {incomePlanned:0,incomeActual:0,savingPlanned:0,savingActual:0,hardExpenses:[],catMeta:{},goldOverride:null,expenses:[],reimbursements:[],plan:{}};
+
+  // 预估消费总额和实际消费总额
+  const planTotal = Object.values(fin.plan||{}).reduce((a,b)=>a+b,0);
+  const actualTotal = fin.monthExpense;
+  const diffTotal = actualTotal - planTotal;
+  const diffPct = planTotal > 0 ? Math.round(actualTotal/planTotal*100) : 0;
+
+  // 超前消费统计
+  const advanceTotal = fin.advanceTotal || 0;
+  const advanceCount = fin.advanceCount || 0;
 
   c.innerHTML = `
     <div class="section-title">月度现金流监控</div>
@@ -1868,11 +1932,74 @@ function renderMoney(c){
       </div>
     </div>
 
+    <!-- 行动力补充（月度消费） -->
+    <div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>行动力补充</span>
+        <div style="display:flex;gap:6px;">
+          <button class="edit-btn" style="color:#34C759;" onclick="openAddReimbursement()">+ 报销</button>
+          <button class="edit-btn" onclick="editPlan()">预算</button>
+        </div>
+      </div>
+
+      <!-- 总额对比小计卡片 -->
+      <div style="background:linear-gradient(135deg,#FFFFFF,#F9F9FB);border-radius:12px;padding:14px;margin-bottom:10px;border:0.5px solid #E5E5EA;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px;">
+          <div>
+            <div style="font-size:11px;color:var(--label-3);">预估总额</div>
+            <div style="font-size:22px;font-weight:700;color:var(--label);">¥${fmtMoney(planTotal)}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:11px;color:var(--label-3);">实际总额</div>
+            <div style="font-size:22px;font-weight:700;color:${diffTotal>0?'var(--red)':'var(--green)'};">¥${fmtMoney(actualTotal)}</div>
+          </div>
+        </div>
+        <div style="background:#E5E5EA;height:6px;border-radius:3px;overflow:hidden;margin-bottom:6px;">
+          <div style="background:${diffTotal>0?'linear-gradient(90deg,#FF9500,#FF3B30)':'linear-gradient(90deg,#34C759,#30D158)'};width:${Math.min(100,diffPct)}%;height:100%;border-radius:3px;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;">
+          <span style="color:var(--label-3);">实际用了${diffPct}%的预估</span>
+          <span style="color:${diffTotal>0?'var(--red)':'var(--green)'};font-weight:600;">${diffTotal>0?'超支':'节省'} ¥${fmtMoney(Math.abs(diffTotal))}</span>
+        </div>
+        ${advanceTotal > 0 ? `
+        <div style="margin-top:8px;padding-top:8px;border-top:0.5px solid #E5E5EA;font-size:11px;color:#FF9500;">
+          ⚠️ 超前消费: ¥${fmtMoney(advanceTotal)} (${advanceCount}笔)
+        </div>
+        ` : ''}
+      </div>
+
+      <!-- 分类明细列表 -->
+      <div class="cmp-pair-head">
+        <span class="cmp-pair-name">明细</span>
+        <span class="cmp-pair-col">预估</span>
+        <span class="cmp-pair-col">实际</span>
+        <span style="width:28px;"></span>
+      </div>
+      ${getExpenseRows(fin, monthData)}
+
+      <!-- 硬性支出列表 -->
+      ${renderHardExpenseList(fin)}
+
+      <!-- 报销回流记录 -->
+      ${renderReimbursementList(fin)}
+
+      <!-- 合计 -->
+      <div class="cmp-pair-row total-row">
+        <span class="cmp-pair-name">消费合计</span>
+        <span class="cmp-pair-col">¥${fmtMoney(planTotal + fin.hardTotal)}</span>
+        <span class="cmp-pair-col expense">¥${fmtMoney(fin.expenseTotal)}</span>
+        <span style="width:28px;"></span>
+      </div>
+    </div>
+
     <!-- 月结金币（渐变蓝填充） -->
     <div class="card gold-coin-card">
       <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
         <span style="color:#fff;">💰 月结金币</span>
-        <button class="edit-btn" style="color:#fff;" onclick="editIncome()">编辑</button>
+        <div style="display:flex;gap:6px;">
+          ${fin.goldOverride !== null ? `<button class="edit-btn" style="color:#FFD700;" onclick="resetGoldOverride()">恢复自动</button>` : ''}
+          <button class="edit-btn" style="color:#fff;" onclick="editGoldOverride()">覆盖</button>
+        </div>
       </div>
       <div class="cmp-pair-head">
         <span class="cmp-pair-name" style="color:rgba(255,255,255,.7);">明细</span>
@@ -1882,46 +2009,62 @@ function renderMoney(c){
       </div>
       <div class="cmp-pair-row">
         <span class="cmp-pair-name" style="color:#fff;">金币</span>
-        <span class="cmp-pair-col" style="color:rgba(255,255,255,.9);">¥ ${fmtMoney(fin.savingPlanned)}</span>
-        <span class="cmp-pair-col" style="color:#fff;font-weight:600;">¥ ${fmtMoney(fin.savingActual)}</span>
+        <span class="cmp-pair-col" style="color:rgba(255,255,255,.9);">¥ ${fmtMoney(fin.goldPlanned)}</span>
+        <span class="cmp-pair-col" style="color:#fff;font-weight:600;">¥ ${fmtMoney(fin.goldFinal)}</span>
         <span style="width:28px;"></span>
       </div>
-    </div>
-
-    <!-- 行动力补充（原月度消费） -->
-    <div class="card">
-      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
-        <span>行动力补充(预估 vs 实际)</span>
-        <button class="edit-btn" onclick="editPlan()">预算</button>
-      </div>
-      <div class="cmp-pair-head">
-        <span class="cmp-pair-name">明细</span>
-        <span class="cmp-pair-col">预估</span>
-        <span class="cmp-pair-col">实际</span>
-        <span style="width:28px;"></span>
-      </div>
-      ${getExpenseRows(fin, monthData)}
-      <div class="cmp-pair-row">
-        <span class="cmp-pair-name">硬性支出</span>
-        <span class="cmp-pair-col">¥ ${fmtMoney(fin.hardExpense)}</span>
-        <span class="cmp-pair-col expense">¥ ${fmtMoney(fin.hardExpense)}</span>
-        <button class="cmp-pair-edit" onclick="editHardExpense()">✏</button>
-      </div>
-      <div class="cmp-pair-row total-row">
-        <span class="cmp-pair-name">合计</span>
-        <span class="cmp-pair-col">${fmtMoney(Object.values(fin.plan||{}).reduce((a,b)=>a+b,0)+fin.hardExpense)}</span>
-        <span class="cmp-pair-col expense">¥ ${fmtMoney(fin.expenseTotal)}</span>
-        <span style="width:28px;"></span>
+      ${fin.goldOverride !== null ? '<div style="font-size:11px;color:#FFD700;padding:4px 0;">⚠️ 已手动覆盖</div>' : ''}
+      <div style="font-size:11px;color:rgba(255,255,255,.5);padding:4px 0;">
+        = 实际工资 - 消费 + 报销 ¥${fmtMoney(fin.reimbTotal)}
       </div>
     </div>
 
     <!-- 封印宝箱 -->
     ${renderTreasureChest()}
 
-    <!-- 添加消费明细 -->
+    <!-- 操作按钮 -->
     <button class="report-btn" style="color:var(--red);" onclick="openAddExpenseItem()">＋ 添加消费明细</button>
 
     <div style="height:20px;"></div>
+  `;
+}
+
+// ===== 硬性支出列表渲染 =====
+function renderHardExpenseList(fin){
+  if(!fin.hardExpenses || !fin.hardExpenses.length) return '';
+  const total = fin.hardTotal;
+  return `
+    <div style="padding:8px 0;border-top:0.5px solid var(--separator);margin-top:4px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span style="font-size:13px;font-weight:600;color:var(--label);">硬性支出</span>
+        <span style="font-size:13px;color:var(--red);font-weight:600;">¥${fmtMoney(total)}</span>
+      </div>
+      ${fin.hardExpenses.map(h=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;">
+          <span style="color:var(--label-2);">${h.name}${h.note?' · '+h.note:''}</span>
+          <span>¥${fmtMoney(h.amount)}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ===== 报销回流列表渲染 =====
+function renderReimbursementList(fin){
+  if(!fin.reimbursements || !fin.reimbursements.length) return '';
+  return `
+    <div style="padding:8px 0;border-top:0.5px solid var(--separator);margin-top:4px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span style="font-size:13px;font-weight:600;color:#34C759;">报销回流</span>
+        <span style="font-size:13px;color:#34C759;font-weight:600;">+¥${fmtMoney(fin.reimbTotal)}</span>
+      </div>
+      ${fin.reimbursements.map(r=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;">
+          <span style="color:var(--label-2);">💸 ${r.note||'报销'}</span>
+          <span style="color:#34C759;">+¥${fmtMoney(r.amount)}</span>
+        </div>
+      `).join('')}
+    </div>
   `;
 }
 
@@ -1935,7 +2078,7 @@ function renderTreasureChest(){
   return `
     <div class="card treasure-chest-card">
       <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
-        <span style="color:#fff;">🎁 封印宝箱</span>
+        <span style="color:#fff;">🏹 封印宝箱</span>
         <button class="edit-btn" style="color:#fff;" onclick="editTreasureChest()">编辑</button>
       </div>
       <div style="display:flex;gap:12px;padding:8px 0;">
@@ -1960,7 +2103,7 @@ function editTreasureChest(){
   const m = DB.finance[state.currentMonth];
   if(!m){ toast('请先切换到有效月份'); return; }
   openSheet(`
-    <div class="sheet-title">🎁 封印宝箱 · ${state.currentMonth}</div>
+    <div class="sheet-title">🏹 封印宝箱 · ${state.currentMonth}</div>
     <div class="sheet-field">
       <div class="sheet-label">已存入金币</div>
       <input class="sheet-input" id="chestSaved" type="number" value="${m.chestSaved||0}" placeholder="0">
@@ -1968,7 +2111,7 @@ function editTreasureChest(){
     <div class="sheet-field">
       <div class="sheet-label">本月需再存入</div>
       <input class="sheet-input" id="chestToSave" type="number" value="${m.chestToSave||0}" placeholder="0" oninput="onChestToSaveInput(this.value, ${m.chestSaved||0})">
-      <div style="font-size:12px;color:var(--label-3);margin-top:4px;">输入后「已存入」会自动联动增加</div>
+      <div style="font-size:12px;color:var(--label-3);margin-top:4px;">输入后，已存入会自动联动增加</div>
     </div>
     <div class="sheet-actions">
       <button class="sheet-btn sheet-btn-secondary" onclick="closeSheet()">取消</button>
@@ -1990,7 +2133,6 @@ function saveTreasureChest(){
   haptic();
   const m = DB.finance[state.currentMonth];
   if(!m) return;
-  // 保存时：已存入 = 原始已存 + 本月再存入
   const toSaveVal = parseFloat(document.getElementById('chestToSave').value) || 0;
   const savedVal = parseFloat(document.getElementById('chestSaved').value) || 0;
   m.chestSaved = savedVal;
@@ -2001,29 +2143,35 @@ function saveTreasureChest(){
   toast('封印宝箱已更新');
 }
 
-// 获取消费明细行(预估 vs 实际对比)
+// 获取消费明细行(预估 vs 实际对比 + 迷你进度条)
 function getExpenseRows(fin, monthData){
   const cats = [...new Set([
     ...Object.keys(fin.plan||{}),
     ...Object.keys(fin.catSummary)
   ])];
-  if(!cats.length && !monthData.expenses.length) return '<div class="cmp-pair-empty">暂无消费明细</div>';
+  if(!cats.length && !(monthData.expenses||[]).length) return '<div class="cmp-pair-empty">暂无消费明细</div>';
+  const planTotal = Object.values(fin.plan||{}).reduce((a,b)=>a+b,0);
   return cats.map(cat=>{
     const planned = (fin.plan||{})[cat] || 0;
     const actual = fin.catSummary[cat] || 0;
     const diff = actual - planned;
-    const diffStr = diff===0 ? '' : (diff>0 ? '<span style="color:var(--red);font-size:11px;">+'+fmtMoney(diff)+'</span>' : '<span style="color:var(--green);font-size:11px;">-'+fmtMoney(-diff)+'</span>');
-    // 获取该分类下所有消费的备注
+    const isAdvance = (monthData.expenses||[]).some(e=>e.cat===cat && e.isAdvance);
+    const pct = planned > 0 ? Math.min(100, Math.round(actual/planned*100)) : (actual>0?100:0);
+    const barColor = diff > 0 ? '#FF9500' : (diff < 0 ? '#34C759' : '#007AFF');
+    const diffStr = diff===0 ? '<span style="color:var(--label-3);font-size:11px;">刚好</span>' : (diff>0 ? '<span style="color:#FF9500;font-size:11px;">超¥'+fmtMoney(diff)+'</span>' : '<span style="color:#34C759;font-size:11px;">省¥'+fmtMoney(-diff)+'</span>');
     const notes = (monthData.expenses||[]).filter(e=>e.cat===cat && e.note);
-    const notesHtml = notes.length ? '<div style="font-size:11px;color:var(--label-3);padding:2px 0 0;line-height:1.4;">' + notes.map(e=>'· '+e.note).join('<br>') + '</div>' : '';
+    const notesHtml = notes.length ? '<div style="font-size:11px;color:var(--label-3);padding:2px 0 0;line-height:1.4;">' + notes.map(e=>'· '+e.note+(e.isAdvance?' ⚠️':'')).join('<br>') + '</div>' : '';
     const safeCat = cat.replace(/'/g,'').replace(/"/g,'');
     return `
       <div class="cmp-pair-row" style="flex-direction:column;align-items:stretch;">
         <div style="display:flex;align-items:center;">
-          <span class="cmp-pair-name">${cat}</span>
+          <span class="cmp-pair-name">${cat}${isAdvance?' <span style="color:#FF9500;font-size:10px;">⚠️</span>':''}</span>
           <span class="cmp-pair-col">¥ ${fmtMoney(planned)}</span>
           <span class="cmp-pair-col expense">¥ ${fmtMoney(actual)} ${diffStr}</span>
-          <button class="cmp-pair-edit" onclick="editExpenseItem('${safeCat}')">✏</button>
+          <button class="cmp-pair-edit" onclick="editExpenseItem('${safeCat}')">✎</button>
+        </div>
+        <div style="background:#F2F2F7;height:3px;border-radius:2px;overflow:hidden;margin:2px 0;">
+          <div style="background:${barColor};width:${pct}%;height:100%;border-radius:2px;"></div>
         </div>
         ${notesHtml}
       </div>
@@ -2031,16 +2179,21 @@ function getExpenseRows(fin, monthData){
   }).join('');
 }
 
-// 添加消费明细(新分类)
+// 添加消费明细(简化:默认支出,不需要选正负)
 function openAddExpenseItem(){
   haptic();
-  const cats = ['衣服服饰','饮食吃喝','购物买买买','交通出行','娱乐休闲','医疗健康','其他'];
+  const m = DB.finance[state.currentMonth];
+  if(!m){ toast('请先切换到有效月份'); return; }
+  const cats = ['衣服服饰','饮食吃喝','购物买买买','交通出行','娱乐休闲','医疗健康','宠物','给自己的奖励','其他'];
+  // 合并已有分类
+  const existingCats = [...new Set([...Object.keys(m.plan||{}), ...(m.expenses||[]).map(e=>e.cat)])];
+  const allCats = [...new Set([...cats, ...existingCats])];
   openSheet(`
     <div class="sheet-title">添加消费明细</div>
     <div class="sheet-field">
       <div class="sheet-label">选择分类</div>
       <div class="cat-select" id="expItemCat">
-        ${cats.map((c,i)=>'<div class="cat-opt '+(i===0?'selected':'')+'" onclick="selectExpItemCat(this)">'+c+'</div>').join('')}
+        ${allCats.map((c,i)=>'<div class="cat-opt '+(i===0?'selected':'')+'" onclick="selectExpItemCat(this)">'+c+'</div>').join('')}
       </div>
     </div>
     <div class="sheet-field">
@@ -2050,6 +2203,12 @@ function openAddExpenseItem(){
     <div class="sheet-field">
       <div class="sheet-label">备注</div>
       <input class="sheet-input" id="expItemNote" placeholder="如:聚餐">
+    </div>
+    <div class="sheet-field">
+      <label style="display:flex;align-items:center;gap:8px;font-size:14px;">
+        <input type="checkbox" id="expItemAdvance" style="width:20px;height:20px;">
+        <span>⚠️ 超前消费（分期/赊账）</span>
+      </label>
     </div>
     <div class="sheet-actions">
       <button class="sheet-btn sheet-btn-secondary" onclick="closeSheet()">取消</button>
@@ -2070,12 +2229,13 @@ function confirmAddExpenseItem(){
   const amount = parseFloat(document.getElementById('expItemAmount').value)||0;
   if(!amount){ toast('请输入金额'); return; }
   const note = document.getElementById('expItemNote').value.trim();
+  const isAdvance = document.getElementById('expItemAdvance').checked;
   haptic();
   const m = DB.finance[state.currentMonth];
   if(!m) return;
-  m.expenses.push({id:'e'+Date.now(),cat:selectedExpItemCat,amount,note});
+  m.expenses.push({id:'e'+Date.now(),cat:selectedExpItemCat,amount,note,isAdvance});
   if(!m.plan) m.plan = {};
-  if(!m.plan[selectedExpItemCat]) m.plan[selectedExpItemCat] = 0;
+  if(m.plan[selectedExpItemCat]===undefined) m.plan[selectedExpItemCat] = 0;
   saveDB();
   closeSheet();
   renderMoney(document.getElementById('content'));
@@ -2083,12 +2243,46 @@ function confirmAddExpenseItem(){
   toast('已添加消费明细');
 }
 
-// 编辑单个消费分类(修改实际支出)
+// 添加报销回流
+function openAddReimbursement(){
+  haptic();
+  openSheet(`
+    <div class="sheet-title">添加报销回流</div>
+    <div class="sheet-field">
+      <div class="sheet-label">金额（自动加回工资）</div>
+      <input class="sheet-input" id="reimbAmount" type="number" placeholder="0">
+    </div>
+    <div class="sheet-field">
+      <div class="sheet-label">备注</div>
+      <input class="sheet-input" id="reimbNote" placeholder="如:公司垫付报销">
+    </div>
+    <div class="sheet-actions">
+      <button class="sheet-btn sheet-btn-secondary" onclick="closeSheet()">取消</button>
+      <button class="sheet-btn sheet-btn-primary" onclick="confirmAddReimbursement()">添加</button>
+    </div>
+  `);
+}
+
+function confirmAddReimbursement(){
+  const amount = parseFloat(document.getElementById('reimbAmount').value)||0;
+  if(!amount){ toast('请输入金额'); return; }
+  const note = document.getElementById('reimbNote').value.trim();
+  haptic();
+  const m = DB.finance[state.currentMonth];
+  if(!m) return;
+  if(!m.reimbursements) m.reimbursements = [];
+  m.reimbursements.push({id:'r'+Date.now(),amount,note});
+  saveDB();
+  closeSheet();
+  renderMoney(document.getElementById('content'));
+  toast('已添加报销回流');
+}
+
+// 编辑单个消费分类(修改实际支出 + 备注 + 超前消费标记)
 function editExpenseItem(cat){
   haptic();
   const m = DB.finance[state.currentMonth];
   if(!m) return;
-  // 处理特殊字符分类名
   const allCats = [...new Set([...Object.keys(m.plan||{}), ...(m.expenses||[]).map(e=>e.cat)])];
   const realCat = allCats.find(k=>k.replace(/'/g,'').replace(/"/g,'')===cat) || cat;
   const items = (m.expenses||[]).filter(e=>e.cat===realCat);
@@ -2102,10 +2296,14 @@ function editExpenseItem(cat){
     <div style="padding:12px 0;border-bottom:.5px solid var(--separator);">
       <div style="font-size:14px;color:var(--label-3);margin-bottom:8px;">当前实际: ¥${fmtMoney(total)} (${items.length}笔)</div>
       ${items.map((e,idx)=>`
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;${e.isAdvance?'background:#FFF3E0;border-radius:8px;padding:8px;margin:4px 0;':''}">
           <div style="flex:1;">
             <span>¥${fmtMoney(e.amount)}</span>
-            <input class="sheet-input" id="expNote_${idx}" value="${(e.note||'').replace(/"/g,'&quot;')}" placeholder="备注(可选)" style="width:140px;height:28px;font-size:13px;margin-left:8px;padding:0 8px;display:inline-block;">
+            <input class="sheet-input" id="expNote_${idx}" value="${(e.note||'').replace(/"/g,'&quot;')}" placeholder="备注(可选)" style="width:120px;height:28px;font-size:13px;margin-left:8px;padding:0 8px;display:inline-block;">
+            <label style="display:flex;align-items:center;gap:4px;margin-top:4px;font-size:11px;">
+              <input type="checkbox" id="expAdvance_${idx}" ${e.isAdvance?'checked':''} style="width:16px;height:16px;">
+              超前消费
+            </label>
           </div>
           <button class="cmp-pair-edit" onclick="delExpenseEntry('${e.id}')">🗑</button>
         </div>
@@ -2125,11 +2323,12 @@ function saveExpenseItem(cat){
   if(!m.plan) m.plan = {};
   const v = parseFloat(document.getElementById('editPlanCat').value)||0;
   if(v>0) m.plan[cat] = v;
-  // 保存每笔消费的备注
   const items = (m.expenses||[]).filter(e=>e.cat===cat);
   items.forEach((e,idx)=>{
     const noteEl = document.getElementById('expNote_'+idx);
     if(noteEl) e.note = noteEl.value.trim();
+    const advEl = document.getElementById('expAdvance_'+idx);
+    if(advEl) e.isAdvance = advEl.checked;
   });
   saveDB();
   closeSheet();
@@ -2143,7 +2342,6 @@ function delExpenseEntry(id){
   if(!m) return;
   m.expenses = m.expenses.filter(e=>e.id!==id);
   saveDB();
-  // 刷新抽屉内容
   const cat = document.querySelector('.sheet-title').textContent.replace('编辑: ','').trim();
   editExpenseItem(cat);
   toast('已删除');
@@ -2155,7 +2353,7 @@ function changeMonth(delta){
   const d = new Date(y, m-1+delta, 1);
   const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
   if(!DB.finance[key]){
-    DB.finance[key] = { incomePlanned:0, incomeActual:0, savingPlanned:0, savingActual:0, hardExpense:0, expenses:[], plan:{} };
+    DB.finance[key] = { incomePlanned:0, incomeActual:0, savingPlanned:0, savingActual:0, hardExpenses:[], catMeta:{}, goldOverride:null, expenses:[], reimbursements:[], plan:{} };
   }
   state.currentMonth = key;
   saveDB();
@@ -2176,14 +2374,6 @@ function editIncome(){
       <div class="sheet-label">主线任务报酬(实际)</div>
       <input class="sheet-input" id="editIncomeActual" type="number" value="${m.incomeActual}" placeholder="0">
     </div>
-    <div class="sheet-field">
-      <div class="sheet-label">月结金币(预估)</div>
-      <input class="sheet-input" id="editSavingPlanned" type="number" value="${m.savingPlanned||0}" placeholder="0">
-    </div>
-    <div class="sheet-field">
-      <div class="sheet-label">月结金币(实际)</div>
-      <input class="sheet-input" id="editSavingActual" type="number" value="${m.savingActual||0}" placeholder="0">
-    </div>
     <div class="sheet-actions">
       <button class="sheet-btn sheet-btn-secondary" onclick="closeSheet()">取消</button>
       <button class="sheet-btn sheet-btn-primary" onclick="saveIncome()">保存</button>
@@ -2196,44 +2386,131 @@ function saveIncome(){
   const m = DB.finance[state.currentMonth];
   m.incomePlanned = parseFloat(document.getElementById('editIncomePlanned').value)||0;
   m.incomeActual = parseFloat(document.getElementById('editIncomeActual').value)||0;
-  m.savingPlanned = parseFloat(document.getElementById('editSavingPlanned').value)||0;
-  m.savingActual = parseFloat(document.getElementById('editSavingActual').value)||0;
   saveDB();
   closeSheet();
   renderMoney(document.getElementById('content'));
   emitSaved();
-  toast('收入已更新');
+  toast('报酬已更新');
 }
 
-// 编辑硬性支出
-function editHardExpense(){
+// 月结金币手动覆盖
+function editGoldOverride(){
   haptic();
-  const m = DB.finance[state.currentMonth];
-  if(!m){ toast('请先切换到有效月份'); return; }
+  const fin = calcMonthFinance(state.currentMonth);
   openSheet(`
-    <div class="sheet-title">编辑硬性支出 · ${state.currentMonth}</div>
+    <div class="sheet-title">月结金币 · 手动覆盖</div>
+    <div style="background:#FFF9E6;border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px;color:#795548;">
+      系统自动计算: ¥${fmtMoney(fin.goldActual)}<br>
+      你可以手动覆盖实际值（用于特殊情况）
+    </div>
     <div class="sheet-field">
-      <div class="sheet-label">硬性支出</div>
-      <input class="sheet-input" id="editHard" type="number" value="${m.hardExpense}" placeholder="0">
+      <div class="sheet-label">覆盖值（留空恢复自动）</div>
+      <input class="sheet-input" id="goldOverrideInput" type="number" value="${fin.goldOverride||''}" placeholder="自动计算">
     </div>
     <div class="sheet-actions">
       <button class="sheet-btn sheet-btn-secondary" onclick="closeSheet()">取消</button>
-      <button class="sheet-btn sheet-btn-primary" onclick="saveHardExpense()">保存</button>
+      <button class="sheet-btn sheet-btn-primary" onclick="saveGoldOverride()">保存</button>
     </div>
   `);
 }
 
-function saveHardExpense(){
+function saveGoldOverride(){
   haptic();
   const m = DB.finance[state.currentMonth];
-  m.hardExpense = parseFloat(document.getElementById('editHard').value)||0;
+  if(!m) return;
+  const val = document.getElementById('goldOverrideInput').value.trim();
+  m.goldOverride = val === '' ? null : (parseFloat(val)||0);
+  saveDB();
+  closeSheet();
+  renderMoney(document.getElementById('content'));
+  toast(m.goldOverride !== null ? '已手动覆盖月结金币' : '已恢复自动计算');
+}
+
+function resetGoldOverride(){
+  haptic();
+  const m = DB.finance[state.currentMonth];
+  if(!m) return;
+  m.goldOverride = null;
+  saveDB();
+  renderMoney(document.getElementById('content'));
+  toast('已恢复自动计算');
+}
+
+// 硬性支出管理（列表式）
+function editHardExpense(){
+  haptic();
+  const m = DB.finance[state.currentMonth];
+  if(!m){ toast('请先切换到有效月份'); return; }
+  if(!m.hardExpenses) m.hardExpenses = [];
+  renderHardExpenseSheet();
+}
+
+function renderHardExpenseSheet(){
+  const m = DB.finance[state.currentMonth];
+  if(!m) return;
+  openSheet(`
+    <div class="sheet-title">硬性支出 · ${state.currentMonth}</div>
+    <div id="hardExpList">
+      ${m.hardExpenses.map((h,idx)=>`
+        <div class="sheet-field" style="display:flex;align-items:center;gap:8px;background:#F9F9FB;border-radius:8px;padding:10px;margin-bottom:6px;">
+          <div style="flex:1;">
+            <input class="sheet-input" id="hardName_${idx}" value="${h.name}" placeholder="名称" style="margin-bottom:4px;">
+            <div style="display:flex;gap:4px;">
+              <input class="sheet-input" id="hardAmount_${idx}" type="number" value="${h.amount}" placeholder="金额" style="flex:1;">
+              <input class="sheet-input" id="hardNote_${idx}" value="${h.note||''}" placeholder="备注" style="flex:1;">
+            </div>
+          </div>
+          <button class="cmp-pair-edit" style="background:#FFEBEE;color:var(--red);width:36px;height:36px;font-size:16px;" onclick="delHardExpense('${h.id}')">🗑</button>
+        </div>
+      `).join('') || '<div style="color:var(--label-3);font-size:14px;text-align:center;padding:20px;">暂无硬性支出</div>'}
+    </div>
+    <button class="cmp-add-btn" style="width:100%;margin-bottom:12px;" onclick="addHardExpense()">+ 添加硬性支出</button>
+    <div class="sheet-actions">
+      <button class="sheet-btn sheet-btn-secondary" onclick="closeSheet()">取消</button>
+      <button class="sheet-btn sheet-btn-primary" onclick="saveHardExpenses()">保存</button>
+    </div>
+  `);
+}
+
+function addHardExpense(){
+  haptic();
+  const m = DB.finance[state.currentMonth];
+  if(!m) return;
+  if(!m.hardExpenses) m.hardExpenses = [];
+  m.hardExpenses.push({id:'h'+Date.now(),name:'',amount:0,note:''});
+  renderHardExpenseSheet();
+}
+
+function delHardExpense(id){
+  haptic();
+  const m = DB.finance[state.currentMonth];
+  if(!m) return;
+  m.hardExpenses = m.hardExpenses.filter(h=>h.id!==id);
+  renderHardExpenseSheet();
+  toast('已删除');
+}
+
+function saveHardExpenses(){
+  haptic();
+  const m = DB.finance[state.currentMonth];
+  if(!m) return;
+  m.hardExpenses.forEach((h,idx)=>{
+    const nameEl = document.getElementById('hardName_'+idx);
+    const amtEl = document.getElementById('hardAmount_'+idx);
+    const noteEl = document.getElementById('hardNote_'+idx);
+    if(nameEl) h.name = nameEl.value.trim() || '未命名';
+    if(amtEl) h.amount = parseFloat(amtEl.value)||0;
+    if(noteEl) h.note = noteEl.value.trim();
+  });
+  // 过滤掉金额为0的空记录
+  m.hardExpenses = m.hardExpenses.filter(h=>h.amount > 0);
   saveDB();
   closeSheet();
   renderMoney(document.getElementById('content'));
   toast('硬性支出已更新');
 }
 
-// 编辑分类计划值(用于偏差报告)
+// 编辑分类计划值(用于预算管理)
 function editPlan(){
   haptic();
   const m = DB.finance[state.currentMonth];
@@ -2305,11 +2582,9 @@ function delPlanCat(name){
   haptic();
   const m = DB.finance[state.currentMonth];
   if(!m || !m.plan) return;
-  // 找到实际分类名(处理特殊字符被清理的情况)
   const realName = Object.keys(m.plan).find(k=>k.replace(/'/g,'').replace(/"/g,'')===name) || name;
   if(m.plan[realName]===undefined){ toast('找不到该分类'); return; }
   delete m.plan[realName];
-  // 同时删除该分类下的消费记录
   if(m.expenses){
     m.expenses = m.expenses.filter(e=>e.cat!==realName);
   }
@@ -2317,6 +2592,7 @@ function delPlanCat(name){
   renderPlanSheet(Object.keys(m.plan));
   toast('已删除分类「'+realName+'」');
 }
+
 
 function openReport(){
   haptic();
@@ -2364,7 +2640,7 @@ function openReport(){
   });
 
   // 总体对比
-  const totalPlanned = Object.values(plan).reduce((a,b)=>a+b,0) + fin.hardExpense;
+  const totalPlanned = Object.values(plan).reduce((a,b)=>a+b,0) + (fin.hardTotal||0);
   const totalActual = fin.expenseTotal;
   html += `
     <div class="bar-row" style="border-top:.5px solid var(--separator);padding-top:12px;">
@@ -3989,6 +4265,169 @@ function fmtCountdown(endsStr){
   return {text, critical: hours<=24, pct, unlocked:false};
 }
 
+// ===== 小决策转盘 =====
+function renderSmallDecisionWheel(){
+  const recent = (DB.smallDecisions||[]).slice(-3).reverse();
+  return `
+    <div class="card" style="background:linear-gradient(135deg,#34C759,#30D158);color:#fff;border-radius:16px;padding:16px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:16px;font-weight:700;">🎲 小决策转盘</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.7);">≤100元快速决断</span>
+      </div>
+      <div style="font-size:12px;color:rgba(255,255,255,.8);margin-bottom:12px;">几十块钱的小事，纠结做不做？转一转！</div>
+      <button class="sheet-btn sheet-btn-primary" style="background:rgba(255,255,255,.2);color:#fff;width:100%;font-size:15px;" onclick="openWheel()">🎯 开始转盘</button>
+      ${recent.length ? `
+        <div style="margin-top:12px;padding-top:10px;border-top:0.5px solid rgba(255,255,255,.2);">
+          <div style="font-size:11px;color:rgba(255,255,255,.7);margin-bottom:6px;">最近决策</div>
+          ${recent.map(s=>`
+            <div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0;">
+              <span>${s.title}</span>
+              <span style="color:${s.result==='做'?'#fff':'rgba(255,255,255,.5)'};">${s.result}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function openWheel(){
+  haptic();
+  openSheet(`
+    <div class="sheet-title">🎲 小决策转盘</div>
+    <div class="sheet-field">
+      <div class="sheet-label">决策事项</div>
+      <input class="sheet-input" id="wheelTitle" placeholder="如:买杯奶茶">
+    </div>
+    <div class="sheet-field">
+      <div class="sheet-label">金额</div>
+      <input class="sheet-input" id="wheelAmount" type="number" placeholder="0" oninput="checkWheelAmount(this.value)">
+    </div>
+    <div class="sheet-field">
+      <div class="sheet-label">类型（可选）</div>
+      <div class="cat-select" id="wheelCat">
+        <div class="cat-opt selected" onclick="selectWheelCat(this)">餐饮外卖</div>
+        <div class="cat-opt" onclick="selectWheelCat(this)">购物冲动</div>
+        <div class="cat-opt" onclick="selectWheelCat(this)">娱乐消费</div>
+        <div class="cat-opt" onclick="selectWheelCat(this)">其他</div>
+      </div>
+    </div>
+    <div id="wheelArea" style="text-align:center;padding:20px 0;">
+      <div id="wheelResult" style="font-size:48px;height:60px;line-height:60px;">?</div>
+      <div style="font-size:12px;color:var(--label-3);margin-top:8px;">输入事项后点击转盘</div>
+    </div>
+    <div class="sheet-actions">
+      <button class="sheet-btn sheet-btn-secondary" onclick="closeSheet()">取消</button>
+      <button class="sheet-btn sheet-btn-primary" onclick="spinWheel()">🎯 转一转</button>
+    </div>
+  `);
+}
+
+let selectedWheelCat = '餐饮外卖';
+function selectWheelCat(el){
+  haptic();
+  document.querySelectorAll('#wheelCat .cat-opt').forEach(o=>o.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedWheelCat = el.textContent;
+}
+
+function checkWheelAmount(val){
+  const v = parseFloat(val)||0;
+  const area = document.getElementById('wheelArea');
+  if(area){
+    if(v > 100){
+      area.innerHTML = '<div style="color:#FF9500;font-size:13px;padding:12px;">⚠️ 金额超过100元，建议走大决策流程</div>';
+    } else {
+      area.innerHTML = '<div id="wheelResult" style="font-size:48px;height:60px;line-height:60px;">?</div><div style="font-size:12px;color:var(--label-3);margin-top:8px;">点击下方按钮转盘</div>';
+    }
+  }
+}
+
+function spinWheel(){
+  const title = document.getElementById('wheelTitle').value.trim();
+  if(!title){ toast('请输入决策事项'); return; }
+  const amount = parseFloat(document.getElementById('wheelAmount').value)||0;
+  haptic();
+  const ratio = DB.wheelRatio || {do:1,dont:1,think:1};
+  const total = ratio.do + ratio.dont + ratio.think;
+  const r = Math.random() * total;
+  let result;
+  if(r < ratio.do) result = '做';
+  else if(r < ratio.do + ratio.dont) result = '不做';
+  else result = '再想想';
+  const resultEl = document.getElementById('wheelResult');
+  if(resultEl){
+    let count = 0;
+    const options = ['做','不做','再想想'];
+    const colors = ['#34C759','#FF3B30','#FF9500'];
+    const interval = setInterval(()=>{
+      const idx = count % 3;
+      resultEl.textContent = options[idx];
+      resultEl.style.color = colors[idx];
+      count++;
+      if(count > 15){
+        clearInterval(interval);
+        resultEl.textContent = result;
+        const finalColor = result==='做'?'#34C759':(result==='不做'?'#FF3B30':'#FF9500');
+        resultEl.style.color = finalColor;
+        resultEl.style.transform = 'scale(1.3)';
+        resultEl.style.transition = 'transform 0.3s';
+        setTimeout(()=>{ resultEl.style.transform = 'scale(1)'; }, 300);
+        if(!DB.smallDecisions) DB.smallDecisions = [];
+        DB.smallDecisions.push({
+          id:'sd'+Date.now(),
+          title, amount, result,
+          category: selectedWheelCat,
+          timestamp: new Date().toISOString()
+        });
+        saveDB();
+        toast('转盘结果: '+result);
+      }
+    }, 80);
+  }
+}
+
+function renderSmallDecisionSummary(){
+  const now = new Date();
+  const ym = now.toISOString().slice(0,7);
+  const monthData = (DB.smallDecisions||[]).filter(s=>s.timestamp.startsWith(ym));
+  if(!monthData.length) return '';
+  const totalCount = monthData.length;
+  const totalAmount = monthData.reduce((s,d)=>s+(d.amount||0),0);
+  const doCount = monthData.filter(d=>d.result==='做').length;
+  const dontCount = monthData.filter(d=>d.result==='不做').length;
+  const thinkCount = monthData.filter(d=>d.result==='再想想').length;
+  const catMap = {};
+  monthData.forEach(d=>{
+    catMap[d.category||'其他'] = (catMap[d.category||'其他']||0)+1;
+  });
+  const cats = Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
+  const topCat = cats[0] ? cats[0][0] : '-';
+  return `
+    <div class="card" style="margin-bottom:12px;">
+      <div class="card-title">📊 ${now.getMonth()+1}月小决策总览</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <div style="flex:1;text-align:center;background:#F2F2F7;border-radius:8px;padding:8px;">
+          <div style="font-size:11px;color:var(--label-3);">总次数</div>
+          <div style="font-size:18px;font-weight:700;">${totalCount}</div>
+        </div>
+        <div style="flex:1;text-align:center;background:#F2F2F7;border-radius:8px;padding:8px;">
+          <div style="font-size:11px;color:var(--label-3);">花费金额</div>
+          <div style="font-size:18px;font-weight:700;">¥${fmtMoney(totalAmount)}</div>
+        </div>
+        <div style="flex:1;text-align:center;background:#F2F2F7;border-radius:8px;padding:8px;">
+          <div style="font-size:11px;color:var(--label-3);">做了</div>
+          <div style="font-size:18px;font-weight:700;color:#34C759;">${doCount}</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--label-3);">
+        不做 ${dontCount} · 再想想 ${thinkCount}<br>
+        纠结最多: <strong>${topCat}</strong>
+      </div>
+    </div>
+  `;
+}
+
 function renderDecision(c){
   const tab = state.decisionTab;
   const cntCool = countByStatus('悬案');
@@ -4008,6 +4447,8 @@ function renderDecision(c){
         📦 历史存档<span class="tab-badge">${cntArch}</span>
       </div>
     </div>
+    ${renderSmallDecisionWheel()}
+    ${renderSmallDecisionSummary()}
     <div id="decList">${renderDecList()}</div>
     <button class="report-btn" style="color:var(--blue);margin-top:8px;" onclick="openAddDecision()">＋ 新增决策记录</button>
     <div style="height:20px;"></div>
@@ -4613,11 +5054,11 @@ function confirmExpense(){
   haptic();
 
   const month = state.currentMonth;
-  if(!DB.finance[month]) DB.finance[month]={incomePlanned:12000,incomeActual:12000,hardExpense:3500,expenses:[],plan:{'衣服服饰':600,'饮食吃喝':1500,'购物买买买':1000}};
+  if(!DB.finance[month]) DB.finance[month]={incomePlanned:12000,incomeActual:12000,hardExpenses:[],catMeta:{},goldOverride:null,expenses:[],reimbursements:[],plan:{'衣服服饰':600,'饮食吃喝':1500,'购物买买买':1000}};
 
   const isHard = expenseCat==='硬性支出';
   if(isHard){
-    DB.finance[month].hardExpense += amount;
+    if(!DB.finance[month].hardExpenses) DB.finance[month].hardExpenses=[]; DB.finance[month].hardExpenses.push({id:'h'+Date.now(),name:'硬性支出',amount:amount,note:''});
   }else{
     DB.finance[month].expenses.push({id:'e'+Date.now(),cat:expenseCat,amount,date:'07-27',note});
   }
